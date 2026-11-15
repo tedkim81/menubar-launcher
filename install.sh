@@ -5,6 +5,7 @@ cd "$(dirname "$0")"
 
 APP="$HOME/Applications/MenubarLauncher.app"
 CONFIG_DIR="$HOME/.config/menubar-launcher"
+BIN="$HOME/.local/bin"
 LABEL=io.github.tedkim81.menubar-launcher
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 
@@ -13,7 +14,7 @@ xcode-select -p >/dev/null 2>&1 || { echo "Command Line Tools are required: xcod
 
 echo "==> Building the menu bar app"
 mkdir -p "$APP/Contents/MacOS"
-clang -O2 -fobjc-arc -framework AppKit -framework UserNotifications app/MenubarLauncher.m \
+clang -O2 -fobjc-arc -framework AppKit -framework Carbon -framework UserNotifications app/MenubarLauncher.m \
   -o "$APP/Contents/MacOS/MenubarLauncher"
 cat > "$APP/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -31,6 +32,10 @@ cat > "$APP/Contents/Info.plist" <<EOF
 </plist>
 EOF
 codesign --force --sign - "$APP"
+
+echo "==> Installing chrome-profile to $BIN"
+mkdir -p "$BIN"
+install -m 755 bin/chrome-profile "$BIN/chrome-profile"
 
 echo "==> Preparing the menu file"
 mkdir -p "$CONFIG_DIR"

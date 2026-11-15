@@ -1,0 +1,78 @@
+#!/usr/bin/osascript -l JavaScript
+// chrome-profile <profile folder>    e.g. chrome-profile "Profile 1"
+// Brings the front-most window of a Chrome profile forward, or opens a new window when the profile has none.
+//
+// Chrome's scripting interface doesn't say which profile a window belongs to, so this looks for each window's
+// ID in the profile's current session file (<profile>/Sessions/Session_*), where Chrome records its windows.
+// Profile folders (Default, Profile 1, ...) are listed under profile.info_cache in Chrome's "Local State" file.
+//
+// Other Chrome instances with their own --user-data-dir (for example one started for remote debugging)
+// share the app name, and addressing Chrome by name may reach any of them. So the script talks to the
+// instance that uses the default data folder, by process ID.
+ObjC.import('AppKit');
+ObjC.import('ScriptingBridge');
+
+const CHROME_DIR = $.NSHomeDirectory().js + '/Library/Application Support/Google/Chrome/';
+const CHROME_BIN = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+
+function run(argv) {
+  const profile = argv[0];
+  if (!profile) throw new Error('usage: chrome-profile <profile folder>, e.g. "Default" or "Profile 1"');
+  if (!$.NSFileManager.defaultManager.fileExistsAtPath(CHROME_DIR + profile)) {
+    throw new Error('no Chrome profile folder named "' + profile + '"');
+  }
+  const sh = Application.currentApplication();
+  sh.includeStandardAdditions = true;
+
+  const pid = defaultChromePid(sh);
+  const session = pid && latestSession(profile);
+  if (session) {
+    const chrome = $.SBApplication.applicationWithProcessIdentifier(pid);
+    const windows = chrome.valueForKey('windows');
+    // Windows come front to back, so the first match is the profile's most recently used window.
+    for (let i = 0; i < windows.count; i++) {
+      const w = windows.objectAtIndex(i);
+      if (session.indexOf(int32le(Number(ObjC.unwrap(w.valueForKey('id'))))) < 0) continue;
+      if (ObjC.unwrap(w.valueForKey('minimized'))) w.setValueForKey(false, 'minimized');
+      w.setValueForKey(1, 'index');
+      // Activate by process ID: `open -a` and Chrome's own activate may pick another instance or be refused.
+      $.NSRunningApplication.runningApplicationWithProcessIdentifier(pid).activateWithOptions(0);
+      return;
+    }
+  }
+
+  // Not running, or no window of this profile yet (a window opened in the last few seconds may not be saved yet).
+  // A new Chrome process hands the request to the running default instance, if there is one.
+  sh.doShellScript('open -na "Google Chrome" --args --profile-directory=' + shellQuote(profile));
+}
+
+// PID of the main Chrome process that uses the default data folder, or 0.
+function defaultChromePid(sh) {
+  const lines = sh.doShellScript('ps -axo pid=,args=').split('\r');
+  for (const line of lines) {
+    const m = line.match(/^\s*(\d+)\s+(.*)$/);
+    if (m && m[2].startsWith(CHROME_BIN) && !m[2].startsWith(CHROME_BIN + ' Helper') &&
+        m[2].indexOf('--user-data-dir') < 0) {
+      return parseInt(m[1]);
+    }
+  }
+  return 0;
+}
+
+// The newest session file as a Latin-1 string, so each byte maps to one character.
+function latestSession(profile) {
+  const dir = CHROME_DIR + profile + '/Sessions/';
+  const names = ObjC.deepUnwrap($.NSFileManager.defaultManager.contentsOfDirectoryAtPathError(dir, null)) || [];
+  const sessions = names.filter(n => n.startsWith('Session_')).sort();
+  if (!sessions.length) return null;
+  const data = $.NSData.dataWithContentsOfFile(dir + sessions[sessions.length - 1]);
+  return data.isNil() ? null : $.NSString.alloc.initWithDataEncoding(data, $.NSISOLatin1StringEncoding).js;
+}
+
+function int32le(n) {
+  return String.fromCharCode(n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255);
+}
+
+function shellQuote(s) {
+  return "'" + s.replace(/'/g, "'\\''") + "'";
+}

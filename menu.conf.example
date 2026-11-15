@@ -3,6 +3,8 @@
 #
 #   PATH=<dirs>       PATH for every command. Apps started at login don't read ~/.zshrc,
 #                     so add the folders of tools installed by Homebrew, nvm and so on.
+#   HOTKEY=<keys>     optional global shortcut that opens the menu at the mouse pointer,
+#                     e.g. ctrl+cmd+J (modifiers: cmd, shift, opt, ctrl; key: A-Z, 0-9 or space)
 #   [Title]           section header
 #   ---               separator
 #   name = command    menu item: runs `command` with /bin/sh. The command may contain `=`.
@@ -12,13 +14,14 @@
 # Commands run in the background. A non-zero exit code shows a notification with the error.
 
 PATH=/opt/homebrew/bin:/usr/local/bin:~/.local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+# HOTKEY=ctrl+cmd+J
 
 [Personal]
 my-project     = open -a Cursor ~/src/my-project
-Chrome         = open -na "Google Chrome" --args --profile-directory="Profile 1"
+Chrome         = ~/.local/bin/chrome-profile "Profile 1"
 Terminal agent = osascript -e 'tell app "Terminal" to do script "cd ~/src/my-project && codex"' -e 'tell app "Terminal" to activate'
 ---
 [Work]
 work-project   = open -a Cursor ~/work/work-project
-Chrome (work)  = open -na "Google Chrome" --args --profile-directory="Default"
+Chrome (work)  = ~/.local/bin/chrome-profile "Default"
 Slack          = open "slack://open?team=T0000000000"
